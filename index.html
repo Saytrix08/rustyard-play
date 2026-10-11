@@ -93,7 +93,23 @@ body {
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 <link rel="manifest" href="index.manifest.json">
-
+<script>
+// Ton auf iPad und iPhone: Ohne das gilt Web-Audio als Klingelton (stumm im Lautlos-Modus) und startet
+// nur, wenn es direkt bei einer Beruehrung fortgesetzt wird. Godot setzt es erst im naechsten Bild fort.
+(function () {
+	if (navigator.audioSession) { try { navigator.audioSession.type = 'playback'; } catch (e) {} }
+	var Base = window.AudioContext || window.webkitAudioContext;
+	if (!Base) { return; }
+	var contexts = window.rustyardAudio = [];
+	class Tracked extends Base { constructor(opts) { super(opts); contexts.push(this); } }
+	window.AudioContext = Tracked;
+	if (window.webkitAudioContext) { window.webkitAudioContext = Tracked; }
+	function unlock() { contexts.forEach(function (c) { if (c.state !== 'running') { c.resume(); } }); }
+	['touchstart', 'touchend', 'pointerup', 'click', 'keydown'].forEach(function (name) {
+		document.addEventListener(name, unlock, true);
+	});
+})();
+</script>
 	</head>
 	<body>
 		<canvas id="canvas">
