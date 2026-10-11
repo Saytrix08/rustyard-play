@@ -96,9 +96,20 @@ body {
 <script>
 // Ton auf iPad und iPhone: Ohne das gilt Web-Audio als Klingelton (stumm im Lautlos-Modus) und startet
 // nur, wenn es direkt bei einer Beruehrung fortgesetzt wird. Godot setzt es erst im naechsten Bild fort.
-// Die Version (213e461 11.10.2026_18:09) setzt tools/publish_web.sh ein; das Dev-Menue zeigt sie unter Ton-Check.
+// Die Version (eff5c2e 11.10.2026_18:14) setzt tools/publish_web.sh ein. Fuer den Ton-Check im Dev-Menue zaehlt das
+// Skript ausserdem, welche Ton-Bausteine Godot anlegt, und merkt sich die letzten Fehlermeldungen.
 (function () {
-	window.rustyardBuild = '213e461 11.10.2026_18:09';
+	window.rustyardBuild = 'eff5c2e 11.10.2026_18:14';
+	var stats = { sources: 0, worklets: 0, modules: 0, errors: [] };
+	function note(kind, args) {
+		var text = Array.prototype.slice.call(args).join(' ');
+		if (/audio|worklet|sound|sample/i.test(text)) { stats.errors.push(kind + ': ' + text.slice(0, 90)); }
+		if (stats.errors.length > 3) { stats.errors.shift(); }
+	}
+	var origError = console.error, origWarn = console.warn;
+	console.error = function () { note('Fehler', arguments); return origError.apply(console, arguments); };
+	console.warn = function () { note('Warnung', arguments); return origWarn.apply(console, arguments); };
+	window.addEventListener('unhandledrejection', function (e) { note('Abgelehnt', [String(e.reason)]); });
 	var session = navigator.audioSession;
 	if (session) { try { session.type = 'playback'; } catch (e) {} }
 	var Base = window.AudioContext || window.webkitAudioContext;
@@ -107,6 +118,19 @@ body {
 	class Tracked extends Base { constructor(opts) { super(opts); contexts.push(this); } }
 	window.AudioContext = Tracked;
 	if (window.webkitAudioContext) { window.webkitAudioContext = Tracked; }
+	var start = AudioBufferSourceNode.prototype.start;
+	AudioBufferSourceNode.prototype.start = function () { stats.sources++; return start.apply(this, arguments); };
+	if (window.AudioWorkletNode) {
+		var Worklet = window.AudioWorkletNode;
+		window.AudioWorkletNode = class extends Worklet { constructor(c, n, o) { super(c, n, o); stats.worklets++; } };
+	}
+	if (window.AudioWorklet) {
+		var addModule = AudioWorklet.prototype.addModule;
+		AudioWorklet.prototype.addModule = function () {
+			return addModule.apply(this, arguments).then(function (r) { stats.modules++; return r; },
+				function (e) { note('Modul', [String(e)]); throw e; });
+		};
+	}
 	function unlock() {
 		contexts.forEach(function (c) {
 			if (c.state === 'running' && c.rustyardUnlocked) { return; }
@@ -122,10 +146,25 @@ body {
 	['touchstart', 'touchend', 'pointerup', 'click', 'keydown'].forEach(function (name) {
 		document.addEventListener(name, unlock, true);
 	});
+	// Piep direkt vom Browser, an Godot vorbei: hoert man den, ist der Weg zum Lautsprecher frei
+	window.rustyardBeep = function () {
+		var c = contexts[0];
+		if (!c) { return false; }
+		var osc = c.createOscillator(), gain = c.createGain();
+		osc.frequency.value = 660;
+		gain.gain.value = 0.25;
+		osc.connect(gain);
+		gain.connect(c.destination);
+		osc.start();
+		osc.stop(c.currentTime + 0.4);
+		return true;
+	};
 	window.rustyardAudioInfo = function () {
-		return 'Version ' + window.rustyardBuild + ' · Web-Audio: ' + contexts.map(function (c) {
-			return c.state + ' ' + c.sampleRate + ' Hz';
-		}).join(', ') + ' · Sitzung: ' + (session ? session.type : 'fehlt (iPadOS unter 17)');
+		return ['Version ' + window.rustyardBuild,
+			'Web-Audio: ' + contexts.map(function (c) { return c.state + ' ' + c.sampleRate + ' Hz'; }).join(', ')
+				+ ', Sitzung ' + (session ? session.type : 'fehlt'),
+			'Godot: ' + stats.sources + ' Sounds, ' + stats.worklets + ' Worklets, ' + stats.modules + ' Module']
+			.concat(stats.errors.length ? stats.errors : ['keine Ton-Fehler']).join(' · ');
 	};
 })();
 </script>
@@ -147,7 +186,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":2502300,"index.wasm":35740641},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":2502412,"index.wasm":35740641},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
