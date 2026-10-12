@@ -96,10 +96,10 @@ body {
 <script>
 // Ton auf iPad und iPhone: Ohne das gilt Web-Audio als Klingelton (stumm im Lautlos-Modus) und startet
 // nur, wenn es direkt bei einer Beruehrung fortgesetzt wird. Godot setzt es erst im naechsten Bild fort.
-// Die Version (33ec233-stream 12.10.2026_12:02) setzt tools/publish_web.sh ein. Fuer den Ton-Check im Dev-Menue zaehlt das
+// Die Version (6f4e4f2-stream 12.10.2026_12:47) setzt tools/publish_web.sh ein. Fuer den Ton-Check im Dev-Menue zaehlt das
 // Skript ausserdem, welche Ton-Bausteine Godot anlegt, und merkt sich die letzten Fehlermeldungen.
 (function () {
-	window.rustyardBuild = '33ec233-stream 12.10.2026_12:02';
+	window.rustyardBuild = '6f4e4f2-stream 12.10.2026_12:47';
 	var stats = { sources: 0, worklets: 0, modules: 0, errors: [] };
 	function note(kind, args) {
 		var text = Array.prototype.slice.call(args).join(' ');
@@ -186,7 +186,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":24173536,"index.wasm":35740641},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":24180272,"index.wasm":35740641},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
