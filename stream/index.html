@@ -96,10 +96,10 @@ body {
 <script>
 // Ton auf iPad und iPhone: Ohne das gilt Web-Audio als Klingelton (stumm im Lautlos-Modus) und startet
 // nur, wenn es direkt bei einer Beruehrung fortgesetzt wird. Godot setzt es erst im naechsten Bild fort.
-// Die Version (cef08f9-stream 14.10.2026_11:58) setzt tools/publish_web.sh ein. Fuer den Ton-Check im Dev-Menue zaehlt das
+// Die Version (2819e89-stream 14.10.2026_12:15) setzt tools/publish_web.sh ein. Fuer den Ton-Check im Dev-Menue zaehlt das
 // Skript ausserdem, welche Ton-Bausteine Godot anlegt, und merkt sich die letzten Fehlermeldungen.
 (function () {
-	window.rustyardBuild = 'cef08f9-stream 14.10.2026_11:58';
+	window.rustyardBuild = '2819e89-stream 14.10.2026_12:15';
 	var stats = { sources: 0, worklets: 0, modules: 0, errors: [] };
 	function note(kind, args) {
 		var text = Array.prototype.slice.call(args).join(' ');
