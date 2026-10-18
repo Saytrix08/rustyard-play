@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<!--
+	Anmeldeseite fuer Rustyard Tycoon (Spielerkonten, siehe autoload/account.gd und docs/KONTEN.md).
+	Liegt neben dem Spiel in rustyard-play (Hauptversion und stream/), Werte aus online.json daneben.
+	- ?return=<Adresse des Spiels>: Web und Stream. Nach der Anmeldung steht sie im Browser-Speicher
+	  (rustyard_login) und die Seite springt zurueck ins Spiel.
+	- ?link=<Code>: iPad-App. Nach der Anmeldung liegt sie in Firestore unter links/<Code>, die App holt sie ab.
+	Google: Anmeldung ueber Googles eigene Seite (Weiterleitung, kein Popup), das ID-Token geht an
+	Firebase (signInWithIdp). E-Mail: Firebase Auth direkt. Kein Firebase-SDK noetig.
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Rustyard Tycoon – Konto</title>
+<style>
+	:root { --dark: #262a34; --panel: #3e4450; --field: #1c1f27; --amber: #ffb840; --light: #ece8de; --gray: #a0a6b2; --red: #ec5446; --green: #76d660; }
+	* { box-sizing: border-box; }
+	body { margin: 0; min-height: 100vh; background: var(--dark); color: var(--light); font: 17px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; display: flex; justify-content: center; }
+	main { width: 100%; max-width: 400px; padding: 28px 16px calc(28px + env(safe-area-inset-bottom)); }
+	h1 { color: var(--amber); font-size: 24px; margin: 0 0 6px; }
+	p { margin: 0 0 16px; color: var(--gray); }
+	button { width: 100%; font: inherit; font-weight: 600; border: 0; border-radius: 6px; padding: 13px; margin: 0 0 10px; cursor: pointer; border-bottom: 4px solid rgba(0,0,0,.35); }
+	button:disabled { opacity: .5; }
+	.amber { background: var(--amber); color: #14161c; }
+	.plate { background: var(--panel); color: var(--light); }
+	.google { background: #fff; color: #1f1f1f; display: flex; align-items: center; justify-content: center; gap: 10px; }
+	.google svg { width: 20px; height: 20px; }
+	.or { display: flex; align-items: center; gap: 10px; color: var(--gray); margin: 18px 0; font-size: 14px; }
+	.or::before, .or::after { content: ""; flex: 1; height: 2px; background: var(--panel); }
+	label { display: block; font-size: 14px; color: var(--gray); margin: 0 0 4px; }
+	input { width: 100%; font: inherit; color: var(--light); background: var(--field); border: 2px solid var(--panel); border-radius: 6px; padding: 11px 12px; margin: 0 0 14px; }
+	input:focus { outline: none; border-color: var(--amber); }
+	.row { display: flex; gap: 10px; }
+	.link { background: none; border: 0; color: var(--amber); padding: 6px 0; width: auto; font-weight: 400; text-decoration: underline; }
+	#msg { min-height: 24px; margin: 6px 0 14px; }
+	#msg.err { color: var(--red); }
+	#msg.ok { color: var(--green); }
+	.hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+	<h1 data-t="title">Konto</h1>
+	<p data-t="intro">Melde dich an oder erstelle ein Konto. Dein Spielstand liegt dann in der Cloud und du spielst auf jedem Gerät weiter.</p>
+	<div id="msg" role="status"></div>
+	<div id="forms">
+		<button class="google" id="google" type="button">
+			<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.9l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>
+			<span data-t="google">Mit Google anmelden</span>
+		</button>
+		<div class="or" data-t="or">oder mit E-Mail</div>
+		<form id="mail" autocomplete="on">
+			<label for="email" data-t="email">E-Mail</label>
+			<input id="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" required>
+			<label for="password" data-t="password">Passwort (mindestens 6 Zeichen)</label>
+			<input id="password" type="password" autocomplete="current-password" minlength="6" required>
+			<div class="row">
+				<button class="amber" id="signin" type="submit" data-t="signin">Anmelden</button>
+				<button class="plate" id="signup" type="button" data-t="signup">Konto erstellen</button>
+			</div>
+			<button class="link" id="reset" type="button" data-t="reset">Passwort vergessen?</button>
+		</form>
+	</div>
+	<button class="plate hidden" id="back" type="button" data-t="back">Zurück zum Spiel</button>
+</main>
+<script>
+(function () {
+	'use strict';
+	var STATE_KEY = 'rustyard_login_state';
+	var HANDOFF_KEY = 'rustyard_login';
+	var de = (navigator.language || 'de').toLowerCase().indexOf('de') === 0;
+	var T = de ? {} : {
+		title: 'Account',
+		intro: 'Sign in or create an account. Your save then lives in the cloud and you can keep playing on any device.',
+		google: 'Sign in with Google', or: 'or with email', email: 'Email', password: 'Password (at least 6 characters)',
+		signin: 'Sign in', signup: 'Create account', reset: 'Forgot password?', back: 'Back to the game'
+	};
+	var M = {
+		wait: ['Einen Moment …', 'One moment …'],
+		redirect: ['Weiter zu Google …', 'Going to Google …'],
+		done_web: ['Angemeldet als %s. Zurück ins Spiel …', 'Signed in as %s. Back to the game …'],
+		done_app: ['Angemeldet als %s. Wechsle jetzt zurück in die App, die Anmeldung kommt dort von selbst an.', 'Signed in as %s. Switch back to the app now, it picks up the sign-in by itself.'],
+		reset_sent: ['Wir haben dir eine E-Mail zum Zurücksetzen geschickt.', 'We sent you an email to reset your password.'],
+		need_email: ['Bitte zuerst deine E-Mail eintragen.', 'Please enter your email first.'],
+		not_set_up: ['Konten sind noch nicht eingerichtet.', 'Accounts are not set up yet.'],
+		bad_state: ['Die Anmeldung mit Google ist abgelaufen. Bitte nochmal versuchen.', 'The Google sign-in expired. Please try again.'],
+		cancelled: ['Anmeldung mit Google abgebrochen.', 'Google sign-in cancelled.'],
+		no_target: ['Diese Seite öffnet das Spiel selbst. Bitte im Spiel unter Einstellungen → Konto anmelden.', 'The game opens this page itself. Please sign in from Settings → Account in the game.'],
+		EMAIL_EXISTS: ['Für diese E-Mail gibt es schon ein Konto. Melde dich an (oder mit Google).', 'This email already has an account. Sign in (or use Google).'],
+		INVALID_LOGIN_CREDENTIALS: ['E-Mail oder Passwort stimmt nicht.', 'Wrong email or password.'],
+		INVALID_PASSWORD: ['E-Mail oder Passwort stimmt nicht.', 'Wrong email or password.'],
+		EMAIL_NOT_FOUND: ['E-Mail oder Passwort stimmt nicht.', 'Wrong email or password.'],
+		INVALID_EMAIL: ['Diese E-Mail-Adresse ist ungültig.', 'This email address is not valid.'],
+		WEAK_PASSWORD: ['Das Passwort braucht mindestens 6 Zeichen.', 'The password needs at least 6 characters.'],
+		MISSING_PASSWORD: ['Bitte ein Passwort eintragen.', 'Please enter a password.'],
+		TOO_MANY_ATTEMPTS_TRY_LATER: ['Zu viele Versuche. Bitte später nochmal.', 'Too many attempts. Please try again later.'],
+		USER_DISABLED: ['Dieses Konto ist gesperrt.', 'This account is disabled.'],
+		OPERATION_NOT_ALLOWED: ['Diese Anmeldeart ist noch nicht freigeschaltet.', 'This sign-in method is not enabled yet.'],
+		network: ['Keine Verbindung. Bitte nochmal versuchen.', 'No connection. Please try again.'],
+		other: ['Das hat nicht geklappt (%s).', 'That did not work (%s).']
+	};
+	function m(key, arg) {
+		var pair = M[key] || M.other;
+		var text = pair[de ? 0 : 1];
+		return text.replace('%s', arg === undefined ? key : arg);
+	}
+	Object.keys(T).forEach(function (k) {
+		var el = document.querySelector('[data-t="' + k + '"]');
+		if (el) { el.textContent = T[k]; }
+	});
+	if (!de) { document.documentElement.lang = 'en'; }
+
+	var msg = document.getElementById('msg');
+	function show(text, kind) { msg.textContent = text; msg.className = kind || ''; }
+	function busy(on) {
+		Array.prototype.forEach.call(document.querySelectorAll('#forms button, #forms input'), function (el) { el.disabled = on; });
+	}
+
+	var params = new URLSearchParams(location.search);
+	var here = location.origin + location.pathname;
+	var cfg = null;
+
+	function randomHex(bytes) {
+		var a = new Uint8Array(bytes);
+		crypto.getRandomValues(a);
+		return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+	}
+
+	// Ziel der Anmeldung: {link: Code} (App) oder {ret: Adresse} (Web, nur dieselbe Seite/Domain)
+	function targetFromQuery() {
+		var link = params.get('link');
+		if (link && /^[0-9a-f]{32}$/.test(link)) { return { link: link }; }
+		var ret = params.get('return');
+		if (ret) {
+			try {
+				var url = new URL(ret, location.href);
+				if (url.origin === location.origin) { return { ret: url.href }; }
+			} catch (e) { /* ungueltig */ }
+		}
+		return null;
+	}
+
+	function post(url, body, form) {
+		return fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' },
+			body: form ? body : JSON.stringify(body)
+		}).then(function (r) {
+			return r.json().catch(function () { return {}; }).then(function (data) {
+				if (!r.ok) {
+					var code = (data.error && data.error.message || String(r.status)).split(' ')[0];
+					throw { code: code };
+				}
+				return data;
+			});
+		}, function () { throw { code: 'network' }; });
+	}
+	function auth(action, body) {
+		return post(cfg.auth_base + '/accounts:' + action + '?key=' + encodeURIComponent(cfg.firebase_api_key), body);
+	}
+	function fail(err) {
+		busy(false);
+		show(m(err && err.code || 'other'), 'err');
+	}
+
+	// Anmeldung fertig: an Web-Spiel oder App weitergeben
+	function finish(target, res, providerId) {
+		var who = res.email || '';
+		if (target.ret) {
+			localStorage.setItem(HANDOFF_KEY, JSON.stringify({
+				refresh_token: res.refreshToken, uid: res.localId, email: who, provider: providerId, at: Date.now()
+			}));
+			show(m('done_web', who), 'ok');
+			setTimeout(function () { location.replace(target.ret); }, 600);
+			return;
+		}
+		var url = cfg.firestore_base + '/projects/' + encodeURIComponent(cfg.firebase_project_id)
+			+ '/databases/(default)/documents/links/' + target.link;
+		var doc = { fields: {
+			refresh_token: { stringValue: res.refreshToken }, uid: { stringValue: res.localId },
+			email: { stringValue: who }, provider: { stringValue: providerId },
+			created: { timestampValue: new Date().toISOString() }
+		} };
+		fetch(url + '?currentDocument.exists=false', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + res.idToken },
+			body: JSON.stringify(doc)
+		}).then(function (r) {
+			if (!r.ok) { throw { code: 'link_' + r.status }; }
+			document.getElementById('forms').classList.add('hidden');
+			show(m('done_app', who), 'ok');
+		}, function () { throw { code: 'network' }; }).catch(fail);
+	}
+
+	// Google: zu Googles Anmeldeseite, sie kommt mit #id_token=... hierher zurueck
+	function startGoogle(target) {
+		var state = randomHex(16), nonce = randomHex(16);
+		localStorage.setItem(STATE_KEY, JSON.stringify({ state: state, nonce: nonce, target: target, at: Date.now() }));
+		show(m('redirect'));
+		location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+			client_id: cfg.google_client_id, redirect_uri: here, response_type: 'id_token',
+			scope: 'openid email profile', state: state, nonce: nonce, prompt: 'select_account'
+		}).toString();
+	}
+
+	function decodeJwt(token) {
+		try {
+			var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+			return JSON.parse(decodeURIComponent(escape(atob(part))));
+		} catch (e) { return {}; }
+	}
+
+	// Rueckkehr von Google
+	function handleGoogleReturn(hash) {
+		history.replaceState(null, '', location.pathname + location.search);
+		var saved = {};
+		try { saved = JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { /* leer */ }
+		localStorage.removeItem(STATE_KEY);
+		if (hash.get('error')) { show(m('cancelled'), 'err'); return saved.target || null; }
+		var idToken = hash.get('id_token');
+		var fresh = saved.at && Date.now() - saved.at < 15 * 60 * 1000;
+		if (!idToken || !fresh || hash.get('state') !== saved.state || decodeJwt(idToken).nonce !== saved.nonce) {
+			show(m('bad_state'), 'err');
+			return saved.target || null;
+		}
+		busy(true);
+		show(m('wait'));
+		auth('signInWithIdp', {
+			postBody: 'id_token=' + encodeURIComponent(idToken) + '&providerId=google.com',
+			requestUri: here, returnSecureToken: true, returnIdpCredential: true
+		}).then(function (res) { finish(saved.target, res, 'google.com'); }).catch(fail);
+		return saved.target || null;
+	}
+
+	function setup(target) {
+		document.getElementById('google').onclick = function () { startGoogle(target); };
+		document.getElementById('mail').onsubmit = function (ev) {
+			ev.preventDefault();
+			emailAuth(target, 'signInWithPassword');
+		};
+		document.getElementById('signup').onclick = function () {
+			var form = document.getElementById('mail');
+			if (!form.reportValidity()) { return; }
+			emailAuth(target, 'signUp');
+		};
+		document.getElementById('reset').onclick = function () {
+			var email = document.getElementById('email').value.trim();
+			if (!email) { show(m('need_email'), 'err'); return; }
+			busy(true);
+			auth('sendOobCode', { requestType: 'PASSWORD_RESET', email: email }).then(function () {
+				busy(false);
+				show(m('reset_sent'), 'ok');
+			}).catch(fail);
+		};
+		if (target.ret) {
+			var back = document.getElementById('back');
+			back.classList.remove('hidden');
+			back.onclick = function () { location.replace(target.ret); };
+		}
+	}
+
+	function emailAuth(target, action) {
+		busy(true);
+		show(m('wait'));
+		auth(action, {
+			email: document.getElementById('email').value.trim(),
+			password: document.getElementById('password').value,
+			returnSecureToken: true
+		}).then(function (res) { finish(target, res, 'password'); }).catch(fail);
+	}
+
+	fetch('online.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
+		cfg = c;
+		if (!cfg.firebase_api_key || !cfg.firebase_project_id) { busy(true); show(m('not_set_up'), 'err'); return; }
+		document.getElementById('google').classList.toggle('hidden', !cfg.google_client_id);
+		document.querySelector('.or').classList.toggle('hidden', !cfg.google_client_id);
+		var hash = new URLSearchParams(location.hash.slice(1));
+		var target = (hash.get('id_token') || hash.get('error')) ? handleGoogleReturn(hash) : targetFromQuery();
+		if (!target) { busy(true); show(m('no_target'), 'err'); return; }
+		setup(target);
+	}).catch(function () { busy(true); show(m('not_set_up'), 'err'); });
+})();
+</script>
+</body>
+</html>

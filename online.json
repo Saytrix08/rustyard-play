@@ -1,0 +1,14 @@
+{
+	"_info": "Spielerkonten und Cloud-Spielstand (Firebase). Leer = Konten aus, das Spiel laeuft wie bisher nur lokal. Einrichten: docs/KONTEN.md",
+	"firebase_api_key": "AIzaSyBpEYB5zp1iCGGeTzBiro4fDw-jwm5slEI",
+	"firebase_project_id": "rustyard-bb63f",
+	"google_client_id": "186551185915-6vsqji0pfs5l8vhu2bhgjkt8d51gkuv8.apps.googleusercontent.com",
+	"login_page": "https://saytrix08.github.io/rustyard-play/login.html",
+	"upload_interval": 60,
+	"link_poll_seconds": 3,
+	"link_timeout_seconds": 600,
+	"fresh_game_seconds": 300,
+	"auth_base": "https://identitytoolkit.googleapis.com/v1",
+	"token_base": "https://securetoken.googleapis.com/v1",
+	"firestore_base": "https://firestore.googleapis.com/v1"
+}
