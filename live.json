@@ -1,0 +1,14 @@
+{
+  "events": [],
+  "mail": [
+    {
+      "id": "willkommen_postfach",
+      "title": "Neu: das Postfach",
+      "title_en": "New: the mailbox",
+      "text": "Hier kommen ab jetzt Nachrichten und Geschenke an alle Schrotter an. Zum Start: 50 Edelchrom.",
+      "text_en": "From now on, news and gifts for all scrappers arrive here. To start: 50 chrome.",
+      "reward": { "chrome": 50 }
+    }
+  ],
+  "balance": {}
+}
