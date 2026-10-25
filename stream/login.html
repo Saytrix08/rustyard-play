@@ -1,12 +1,16 @@
 <!DOCTYPE html>
 <!--
 	Anmeldeseite fuer Rustyard Tycoon (Spielerkonten, siehe autoload/account.gd und docs/KONTEN.md).
-	Liegt neben dem Spiel in rustyard-play (Hauptversion und stream/), Werte aus online.json daneben.
+	Liegt bei Firebase Hosting (https://rustyard-bb63f.web.app, fuer die Apps, docs/WEBSEITEN.md) und neben der
+	Web-Testversion in rustyard-play (Hauptversion und stream/), Werte jeweils aus online.json daneben.
 	- ?return=<Adresse des Spiels>: Web und Stream. Nach der Anmeldung steht sie im Browser-Speicher
 	  (rustyard_login) und die Seite springt zurueck ins Spiel.
 	- ?link=<Code>: iPad-App. Nach der Anmeldung liegt sie in Firestore unter links/<Code>, die App holt sie ab.
+	- ?delete=1: Konto loeschen ohne App (Pflicht fuer Google Play, Adresse delete.html leitet hierher).
+	  Nach der Anmeldung loescht die Seite den Cloud-Spielstand (saves/<uid>) und das Konto, wie im Spiel.
 	Google: Anmeldung ueber Googles eigene Seite (Weiterleitung, kein Popup), das ID-Token geht an
 	Firebase (signInWithIdp). E-Mail: Firebase Auth direkt. Kein Firebase-SDK noetig.
+	Zeilen mit data-legal (Link zum Datenschutz) nehmen build_site.sh und publish_web.sh heraus, wo es die Seite nicht gibt.
 -->
 <html lang="de">
 <head>
@@ -25,6 +29,7 @@
 	button:disabled { opacity: .5; }
 	.amber { background: var(--amber); color: #14161c; }
 	.plate { background: var(--panel); color: var(--light); }
+	.red { background: var(--red); color: #14161c; }
 	.google { background: #fff; color: #1f1f1f; display: flex; align-items: center; justify-content: center; gap: 10px; }
 	.google svg { width: 20px; height: 20px; }
 	.or { display: flex; align-items: center; gap: 10px; color: var(--gray); margin: 18px 0; font-size: 14px; }
@@ -38,6 +43,7 @@
 	#msg.err { color: var(--red); }
 	#msg.ok { color: var(--green); }
 	.hidden { display: none; }
+	.legal { display: block; text-align: center; font-size: 14px; color: var(--gray); margin: 18px 0 0; }
 </style>
 </head>
 <body>
@@ -63,6 +69,11 @@
 			<button class="link" id="reset" type="button" data-t="reset">Passwort vergessen?</button>
 		</form>
 	</div>
+	<div id="confirm" class="hidden">
+		<p id="who"></p>
+		<button class="red" id="erase" type="button" data-t="erase">Konto endgültig löschen</button>
+		<button class="plate" id="keep" type="button" data-t="keep">Abbrechen</button>
+	</div>
 	<button class="plate hidden" id="back" type="button" data-t="back">Zurück zum Spiel</button>
 </main>
 <script>
@@ -75,7 +86,8 @@
 		title: 'Account',
 		intro: 'Sign in or create an account. Your save then lives in the cloud and you can keep playing on any device.',
 		google: 'Sign in with Google', or: 'or with email', email: 'Email', password: 'Password (at least 6 characters)',
-		signin: 'Sign in', signup: 'Create account', reset: 'Forgot password?', back: 'Back to the game'
+		signin: 'Sign in', signup: 'Create account', reset: 'Forgot password?', back: 'Back to the game',
+		erase: 'Delete account for good', keep: 'Cancel', privacy: 'Privacy policy'
 	};
 	var M = {
 		wait: ['Einen Moment …', 'One moment …'],
@@ -99,6 +111,13 @@
 		USER_DISABLED: ['Dieses Konto ist gesperrt.', 'This account is disabled.'],
 		OPERATION_NOT_ALLOWED: ['Diese Anmeldeart ist noch nicht freigeschaltet.', 'This sign-in method is not enabled yet.'],
 		network: ['Keine Verbindung. Bitte nochmal versuchen.', 'No connection. Please try again.'],
+		del_title: ['Konto löschen', 'Delete account'],
+		del_intro: ['Hier löschst du dein Konto bei Rustyard Tycoon, auch ohne die App. Melde dich dazu an. Gelöscht werden sofort und endgültig: das Konto (E-Mail-Adresse bzw. Verknüpfung mit Google) und dein Spielstand in der Cloud. Der Spielstand auf deinen Geräten bleibt, bis du das Spiel deinstallierst oder ihn im Spiel unter Einstellungen zurücksetzt. In der App geht das Löschen auch unter Einstellungen → Konto.',
+			'Delete your Rustyard Tycoon account here, even without the app. Sign in first. Deleted right away and for good: the account (email address or Google link) and your cloud save. The save on your devices stays until you uninstall the game or reset it under Settings in the game. In the app you can also delete the account under Settings → Account.'],
+		del_ask: ['Angemeldet als %s. Konto und Cloud-Spielstand jetzt endgültig löschen? Das lässt sich nicht rückgängig machen.', 'Signed in as %s. Delete the account and the cloud save for good now? This cannot be undone.'],
+		del_done: ['Dein Konto und dein Cloud-Spielstand sind gelöscht.', 'Your account and your cloud save have been deleted.'],
+		del_kept: ['Nichts gelöscht.', 'Nothing deleted.'],
+		CREDENTIAL_TOO_OLD_LOGIN_AGAIN: ['Die Anmeldung ist zu alt. Bitte die Seite neu laden und nochmal anmelden.', 'The sign-in is too old. Please reload the page and sign in again.'],
 		other: ['Das hat nicht geklappt (%s).', 'That did not work (%s).']
 	};
 	function m(key, arg) {
@@ -128,8 +147,9 @@
 		return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
 	}
 
-	// Ziel der Anmeldung: {link: Code} (App) oder {ret: Adresse} (Web, nur dieselbe Seite/Domain)
+	// Ziel der Anmeldung: {link: Code} (App), {ret: Adresse} (Web, nur dieselbe Seite/Domain) oder {del: true} (Konto loeschen)
 	function targetFromQuery() {
+		if (params.get('delete')) { return { del: true }; }
 		var link = params.get('link');
 		if (link && /^[0-9a-f]{32}$/.test(link)) { return { link: link }; }
 		var ret = params.get('return');
@@ -165,9 +185,10 @@
 		show(m(err && err.code || 'other'), 'err');
 	}
 
-	// Anmeldung fertig: an Web-Spiel oder App weitergeben
+	// Anmeldung fertig: an Web-Spiel oder App weitergeben (oder Loeschen bestaetigen lassen)
 	function finish(target, res, providerId) {
 		var who = res.email || '';
+		if (target.del) { askDelete(res); return; }
 		if (target.ret) {
 			localStorage.setItem(HANDOFF_KEY, JSON.stringify({
 				refresh_token: res.refreshToken, uid: res.localId, email: who, provider: providerId, at: Date.now()
@@ -192,6 +213,38 @@
 			document.getElementById('forms').classList.add('hidden');
 			show(m('done_app', who), 'ok');
 		}, function () { throw { code: 'network' }; }).catch(fail);
+	}
+
+	// Konto loeschen: erst den Cloud-Spielstand (darf nur das Konto selbst), dann das Konto. Wie Account.delete_account().
+	function askDelete(res) {
+		busy(false);
+		show('');
+		document.getElementById('forms').classList.add('hidden');
+		document.getElementById('confirm').classList.remove('hidden');
+		document.getElementById('who').textContent = m('del_ask', res.email || res.localId);
+		var buttons = document.querySelectorAll('#confirm button');
+		function lock(on) { Array.prototype.forEach.call(buttons, function (el) { el.disabled = on; }); }
+		document.getElementById('keep').onclick = function () {
+			document.getElementById('confirm').classList.add('hidden');
+			show(m('del_kept'), 'ok');
+		};
+		document.getElementById('erase').onclick = function () {
+			lock(true);
+			show(m('wait'));
+			var url = cfg.firestore_base + '/projects/' + encodeURIComponent(cfg.firebase_project_id)
+				+ '/databases/(default)/documents/saves/' + encodeURIComponent(res.localId);
+			fetch(url, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + res.idToken } }).then(function (r) {
+				if (!r.ok && r.status !== 404) { throw { code: 'save_' + r.status }; }
+			}, function () { throw { code: 'network' }; }).then(function () {
+				return auth('delete', { idToken: res.idToken });
+			}).then(function () {
+				document.getElementById('confirm').classList.add('hidden');
+				show(m('del_done'), 'ok');
+			}).catch(function (err) {
+				lock(false);
+				show(m(err && err.code || 'other'), 'err');
+			});
+		};
 	}
 
 	// Google: zu Googles Anmeldeseite, sie kommt mit #id_token=... hierher zurueck
@@ -254,6 +307,9 @@
 				show(m('reset_sent'), 'ok');
 			}).catch(fail);
 		};
+		if (target.del) {
+			document.getElementById('signup').classList.add('hidden');
+		}
 		if (target.ret) {
 			var back = document.getElementById('back');
 			back.classList.remove('hidden');
@@ -278,6 +334,11 @@
 		document.querySelector('.or').classList.toggle('hidden', !cfg.google_client_id);
 		var hash = new URLSearchParams(location.hash.slice(1));
 		var target = (hash.get('id_token') || hash.get('error')) ? handleGoogleReturn(hash) : targetFromQuery();
+		if (target && target.del) {
+			document.title = 'Rustyard Tycoon – ' + m('del_title');
+			document.querySelector('[data-t="title"]').textContent = m('del_title');
+			document.querySelector('[data-t="intro"]').textContent = m('del_intro');
+		}
 		if (!target) { busy(true); show(m('no_target'), 'err'); return; }
 		setup(target);
 	}).catch(function () { busy(true); show(m('not_set_up'), 'err'); });

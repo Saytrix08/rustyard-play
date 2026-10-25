@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<!--
+	Feste Adresse zum Konto loeschen fuer die Store-Eintraege (Google Play verlangt eine Seite ausserhalb der App):
+	https://rustyard-bb63f.web.app/delete.html (Firebase Hosting, docs/WEBSEITEN.md; die Web-Testversion hat eine Kopie).
+	Leitet auf die Anmeldeseite im Loeschmodus weiter (login.html?delete=1), denn nur dorthin darf Google nach der
+	Anmeldung zurueckspringen.
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Rustyard Tycoon – Konto löschen</title>
+<meta http-equiv="refresh" content="0; url=login.html?delete=1">
+<script>location.replace('login.html?delete=1');</script>
+<style>body { background: #262a34; color: #ece8de; font: 17px/1.4 system-ui, sans-serif; padding: 28px 16px; } a { color: #ffb840; }</style>
+</head>
+<body>
+<p><a href="login.html?delete=1">Konto löschen / Delete account</a></p>
+</body>
+</html>
