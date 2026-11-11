@@ -71,7 +71,7 @@ self.addEventListener('fetch', function (event) {
 		}
 		// Seite frisch holen, ganz lesen, Kennung merken, dann ausliefern. So steht der Speicher fest,
 		// bevor die Seite ihre Pakete anfragt.
-		event.respondWith(fetch(request).then(function (response) {
+		event.respondWith(fetch(request, { cache: 'no-cache' }).then(function (response) {
 			if (response.status !== 200) {
 				return response;
 			}
@@ -95,7 +95,9 @@ self.addEventListener('fetch', function (event) {
 				if (hit) {
 					return hit;
 				}
-				return fetch(request).then(function (response) {
+				// Am Browser-Zwischenspeicher vorbei holen: GitHub Pages erlaubt 10 Minuten Zwischenspeichern, sonst
+				// landet kurz nach einem Update das alte Paket im Speicher des neuen Builds und bleibt dort (Build 93).
+				return fetch(new Request(request, { cache: 'no-cache' })).then(function (response) {
 					// Nur vollstaendige Antworten behalten (keine Teilstuecke, keine Fehler)
 					if (response.status === 200) {
 						cache.put(request, response.clone()).catch(function () {});
