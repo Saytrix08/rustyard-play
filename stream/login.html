@@ -5,7 +5,9 @@
 	Web-Testversion in rustyard-play (Hauptversion und stream/), Werte jeweils aus online.json daneben.
 	- ?return=<Adresse des Spiels>: Web und Stream. Nach der Anmeldung steht sie im Browser-Speicher
 	  (rustyard_login) und die Seite springt zurueck ins Spiel.
-	- ?link=<Code>: iPad-App. Nach der Anmeldung liegt sie in Firestore unter links/<Code>, die App holt sie ab.
+	- ?link=<Code>: Apps. Die App zeigt dazu einen Kurzcode (6 Ziffern), den man hier eintippt; er steht nie im
+	  Link. Nach der Anmeldung liegt sie in Firestore unter links/<Kennung aus Code und Kurzcode>, die App holt
+	  sie dort ab. Wer nur einen Link untergeschoben bekommt, gibt damit nichts frei.
 	- ?delete=1: Konto loeschen ohne App (Pflicht fuer Google Play, Adresse delete.html leitet hierher).
 	  Nach der Anmeldung loescht die Seite den Cloud-Spielstand (saves/<uid>) und das Konto, wie im Spiel.
 	Google: Anmeldung ueber Googles eigene Seite (Weiterleitung, kein Popup), das ID-Token geht an
@@ -43,6 +45,8 @@
 	#msg.err { color: var(--red); }
 	#msg.ok { color: var(--green); }
 	.hidden { display: none; }
+	#pin { font-size: 26px; letter-spacing: 4px; text-align: center; }
+	.hint { font-size: 14px; color: var(--gray); margin: 6px 0 18px; }
 	.legal { display: block; text-align: center; font-size: 14px; color: var(--gray); margin: 18px 0 0; }
 </style>
 </head>
@@ -52,6 +56,11 @@
 	<p data-t="intro">Melde dich an oder erstelle ein Konto. Dein Spielstand liegt dann in der Cloud und du spielst auf jedem Gerät weiter.</p>
 	<div id="msg" role="status"></div>
 	<div id="forms">
+		<div id="pinbox" class="hidden">
+			<label for="pin" data-t="pin">Code aus der App (6 Ziffern)</label>
+			<input id="pin" type="text" inputmode="numeric" autocomplete="off" maxlength="7" pattern="[0-9 ]*">
+			<p class="hint" data-t="pin_hint">Der Code steht gerade in deiner App unter Konto. Zeigt sie keinen, aktualisiere die App zuerst. Hat dir jemand diesen Link oder einen Code geschickt, schließe diese Seite.</p>
+		</div>
 		<button class="google" id="google" type="button">
 			<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.9l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>
 			<span data-t="google">Mit Google anmelden</span>
@@ -87,13 +96,16 @@
 		intro: 'Sign in or create an account. Your save then lives in the cloud and you can keep playing on any device.',
 		google: 'Sign in with Google', or: 'or with email', email: 'Email', password: 'Password (at least 6 characters)',
 		signin: 'Sign in', signup: 'Create account', reset: 'Forgot password?', back: 'Back to the game',
-		erase: 'Delete account for good', keep: 'Cancel', privacy: 'Privacy policy'
+		erase: 'Delete account for good', keep: 'Cancel', privacy: 'Privacy policy',
+		pin: 'Code from the app (6 digits)',
+		pin_hint: 'The code is shown in your app under Account right now. If it shows none, update the app first. If someone sent you this link or a code, close this page.'
 	};
 	var M = {
 		wait: ['Einen Moment …', 'One moment …'],
 		redirect: ['Weiter zu Google …', 'Going to Google …'],
 		done_web: ['Angemeldet als %s. Zurück ins Spiel …', 'Signed in as %s. Back to the game …'],
-		done_app: ['Angemeldet als %s. Wechsle jetzt zurück in die App, die Anmeldung kommt dort von selbst an.', 'Signed in as %s. Switch back to the app now, it picks up the sign-in by itself.'],
+		done_app: ['Angemeldet als %s. Wechsle jetzt zurück in die App, die Anmeldung kommt dort von selbst an. Kommt nichts an, stimmte der Code nicht: Starte die Anmeldung in der App dann neu.', 'Signed in as %s. Switch back to the app now, it picks up the sign-in by itself. If nothing arrives, the code was wrong: start the sign-in in the app again.'],
+		need_pin: ['Bitte zuerst den Code aus der App eintragen (6 Ziffern).', 'Please enter the code from the app first (6 digits).'],
 		reset_sent: ['Wir haben dir eine E-Mail zum Zurücksetzen geschickt.', 'We sent you an email to reset your password.'],
 		need_email: ['Bitte zuerst deine E-Mail eintragen.', 'Please enter your email first.'],
 		not_set_up: ['Konten sind noch nicht eingerichtet.', 'Accounts are not set up yet.'],
@@ -162,6 +174,24 @@
 		return null;
 	}
 
+	// App-Anmeldung: Kurzcode aus dem Feld (nur Ziffern) in das Ziel uebernehmen. false = fehlt noch.
+	function withPin(target) {
+		if (!target.link) { return true; }
+		var pin = document.getElementById('pin').value.replace(/[^0-9]/g, '');
+		if (pin.length !== 6) { show(m('need_pin'), 'err'); document.getElementById('pin').focus(); return false; }
+		target.pin = pin;
+		return true;
+	}
+	// Kennung des Eintrags in Firestore: die ersten 32 Hex-Zeichen von SHA-256("<Code>:<Kurzcode>"),
+	// genauso rechnet die App (CloudApi.link_doc_id).
+	function linkId(code, pin) {
+		return crypto.subtle.digest('SHA-256', new TextEncoder().encode(code + ':' + pin)).then(function (hash) {
+			return Array.prototype.map.call(new Uint8Array(hash), function (b) {
+				return ('0' + b.toString(16)).slice(-2);
+			}).join('').slice(0, 32);
+		});
+	}
+
 	function post(url, body, form) {
 		return fetch(url, {
 			method: 'POST',
@@ -197,22 +227,27 @@
 			setTimeout(function () { location.replace(target.ret); }, 600);
 			return;
 		}
-		var url = cfg.firestore_base + '/projects/' + encodeURIComponent(cfg.firebase_project_id)
-			+ '/databases/(default)/documents/links/' + target.link;
-		var doc = { fields: {
-			refresh_token: { stringValue: res.refreshToken }, uid: { stringValue: res.localId },
-			email: { stringValue: who }, provider: { stringValue: providerId },
-			created: { timestampValue: new Date().toISOString() }
-		} };
-		fetch(url + '?currentDocument.exists=false', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + res.idToken },
-			body: JSON.stringify(doc)
-		}).then(function (r) {
-			if (!r.ok) { throw { code: 'link_' + r.status }; }
-			document.getElementById('forms').classList.add('hidden');
-			show(m('done_app', who), 'ok');
-		}, function () { throw { code: 'network' }; }).catch(fail);
+		// Eintrag anlegen: nur, wenn es ihn noch nicht gibt, und mit der Uhrzeit des Servers (gilt 10 Minuten,
+		// firebase/firestore.rules)
+		var docs = 'projects/' + cfg.firebase_project_id + '/databases/(default)/documents';
+		linkId(target.link, target.pin || '').then(function (id) {
+			return fetch(cfg.firestore_base + '/' + docs + ':commit', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + res.idToken },
+				body: JSON.stringify({ writes: [{
+					update: { name: docs + '/links/' + id, fields: {
+						refresh_token: { stringValue: res.refreshToken }, uid: { stringValue: res.localId },
+						email: { stringValue: who }, provider: { stringValue: providerId }
+					} },
+					updateTransforms: [{ fieldPath: 'created', setToServerValue: 'REQUEST_TIME' }],
+					currentDocument: { exists: false }
+				}] })
+			}).then(function (r) {
+				if (!r.ok) { throw { code: 'link_' + r.status }; }
+				document.getElementById('forms').classList.add('hidden');
+				show(m('done_app', who), 'ok');
+			}, function () { throw { code: 'network' }; });
+		}).catch(fail);
 	}
 
 	// Konto loeschen: erst den Cloud-Spielstand (darf nur das Konto selbst), dann das Konto. Wie Account.delete_account().
@@ -249,6 +284,7 @@
 
 	// Google: zu Googles Anmeldeseite, sie kommt mit #id_token=... hierher zurueck
 	function startGoogle(target) {
+		if (!withPin(target)) { return; }
 		var state = randomHex(16), nonce = randomHex(16);
 		localStorage.setItem(STATE_KEY, JSON.stringify({ state: state, nonce: nonce, target: target, at: Date.now() }));
 		show(m('redirect'));
@@ -310,6 +346,10 @@
 		if (target.del) {
 			document.getElementById('signup').classList.add('hidden');
 		}
+		if (target.link) {
+			document.getElementById('pinbox').classList.remove('hidden');
+			if (target.pin) { document.getElementById('pin').value = target.pin; }
+		}
 		if (target.ret) {
 			var back = document.getElementById('back');
 			back.classList.remove('hidden');
@@ -318,6 +358,7 @@
 	}
 
 	function emailAuth(target, action) {
+		if (!withPin(target)) { return; }
 		busy(true);
 		show(m('wait'));
 		auth(action, {
