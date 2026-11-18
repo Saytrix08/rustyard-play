@@ -10,7 +10,7 @@
 // Der Worker selbst muss sich fuer einen neuen Build nicht aendern (Browser pruefen das nur ab und zu).
 var PREFIX = 'rustyard-';
 // Dateien, die zu genau einem Build gehoeren (Name am Ende der Adresse, ohne ?...)
-var KEEP = /\/(index\.(js|wasm|pck|audio\.worklet\.js|audio\.position\.worklet\.js)|music\.pck|loader\.js|loader_logo\.svg|loader_font\.ttf)$/;
+var KEEP = /\/(index\.(js|wasm|pck|audio\.worklet\.js|audio\.position\.worklet\.js)|music\.pck|loader\.js|sharp_scale\.js|loader_logo\.svg|loader_font\.ttf)$/;
 // Hier merkt sich der Worker die Kennung der zuletzt geladenen Seite, falls der Browser ihn zwischendurch
 // beendet (dann ist die Variable leer).
 var MARK = PREFIX + 'aktuell';
